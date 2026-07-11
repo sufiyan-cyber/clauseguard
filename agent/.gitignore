@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.mastra/
+.env
+*.db
+*.db-*
+uploads/
+.fastembed-cache/

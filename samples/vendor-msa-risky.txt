@@ -1,0 +1,40 @@
+MASTER SERVICES AGREEMENT
+
+This Master Services Agreement ("Agreement") is entered into as of July 1, 2026 (the "Effective Date") by and between NimbusStack Software Inc., a Delaware corporation with offices at 2201 Harbor Point, Wilmington, DE ("Provider"), and BrightCart Retail Private Limited, with offices at 14 MG Road, Bengaluru, Karnataka ("Customer"). Provider and Customer are each a "Party" and together the "Parties".
+
+1. SERVICES. Provider shall provide Customer with access to its cloud-based inventory analytics platform and related support services (the "Services") as described in one or more order forms executed by the Parties (each an "Order Form").
+
+2. TERM AND AUTOMATIC RENEWAL. The initial term of this Agreement is three (3) years from the Effective Date (the "Initial Term"). This Agreement automatically renews for successive terms equal to the Initial Term unless Customer delivers written notice of non-renewal no later than one hundred eighty (180) days prior to the expiration of the then-current term. Provider may increase fees for any renewal term in its sole discretion without prior notice to Customer.
+
+3. FEES AND PAYMENT. Customer shall pay all fees set forth in the applicable Order Form within ten (10) days of the date of invoice. All fees are non-refundable and non-cancellable in all circumstances and may not be withheld, reduced, or offset for any reason, including any alleged breach by Provider. Provider may suspend the Services immediately and without notice for any late payment, and Customer shall pay a reinstatement fee equal to twenty-five percent (25%) of the annual fees before Services are restored.
+
+4. TERMINATION. Provider may terminate this Agreement or suspend the Services at any time, for any reason or no reason, upon written notice to Customer. Customer may terminate this Agreement only for Provider's material breach that remains uncured for sixty (60) days after written notice, and Customer shall not be entitled to any refund of prepaid fees under any circumstances, including termination for Provider's breach.
+
+5. INTELLECTUAL PROPERTY. All work product, inventions, improvements, modifications, and feedback conceived, created, or suggested by either Party in connection with this Agreement, including Customer's suggestions, configurations, and any derivatives of Customer Data, shall be the sole and exclusive property of Provider. Customer hereby irrevocably assigns to Provider all right, title, and interest in and to the foregoing without additional consideration.
+
+6. CUSTOMER DATA. Customer grants Provider a perpetual, irrevocable, worldwide, royalty-free, sublicensable license to use, reproduce, modify, and create derivative works from all Customer Data, including personal information of Customer's end users, for any business purpose of Provider, including improving Provider's services, marketing, and the resale of aggregated or de-identified data, without notice or compensation to Customer.
+
+7. CONFIDENTIALITY. Customer shall hold in strict confidence all information disclosed by Provider, whether or not marked confidential, in perpetuity. Customer's confidentiality obligations extend to information that Customer independently develops that is similar to Provider's Confidential Information. In the event of any disclosure, Provider shall be entitled to liquidated damages of five hundred thousand dollars ($500,000) per disclosure, without any requirement to prove actual harm, in addition to injunctive relief.
+
+8. WARRANTIES. THE SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTY OF ANY KIND. PROVIDER EXPRESSLY DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE, INCLUDING ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT, AND DOES NOT WARRANT THAT THE SERVICES WILL BE UNINTERRUPTED, TIMELY, SECURE, OR ERROR-FREE.
+
+9. INDEMNIFICATION. Customer shall indemnify, defend, and hold harmless Provider and its affiliates, officers, directors, employees, and agents from and against any and all claims, demands, losses, liabilities, damages, costs, and expenses (including reasonable attorneys' fees) of any kind arising out of or relating in any way to Customer's use of the Services or this Agreement, regardless of cause or fault, including claims arising from Provider's own negligence.
+
+10. LIMITATION OF LIABILITY. PROVIDER'S TOTAL AGGREGATE LIABILITY ARISING OUT OF OR RELATED TO THIS AGREEMENT, REGARDLESS OF THE FORM OF ACTION, SHALL NOT EXCEED THE AMOUNTS ACTUALLY PAID BY CUSTOMER TO PROVIDER IN THE THREE (3) MONTHS IMMEDIATELY PRECEDING THE EVENT GIVING RISE TO THE CLAIM. IN NO EVENT SHALL PROVIDER BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES. CUSTOMER'S PAYMENT OBLIGATIONS SHALL NOT BE SUBJECT TO ANY LIMITATION OF LIABILITY.
+
+11. NON-COMPETE. During the term of this Agreement and for a period of five (5) years following its termination for any reason, Customer shall not, directly or indirectly, develop, invest in, operate, or provide services to any business that competes with Provider's inventory analytics business anywhere in the world, and shall not hire or engage any current or former employee or contractor of Provider.
+
+12. DISPUTE RESOLUTION. All disputes arising out of or relating to this Agreement shall be resolved exclusively in the state and federal courts located in Wilmington, Delaware, and Customer irrevocably waives any right to a jury trial and any right to participate in any class or representative action. Customer shall reimburse Provider for all attorneys' fees and costs incurred by Provider in any action brought to enforce this Agreement, regardless of the outcome of such action.
+
+13. FORCE MAJEURE. Neither Party shall be liable for failure or delay in performance (except Customer's payment obligations) caused by events beyond its reasonable control, including natural disasters, war, terrorism, labor disputes, governmental action, or failures of the internet or utilities, provided that the affected Party gives prompt written notice and uses commercially reasonable efforts to resume performance.
+
+14. GOVERNING LAW. This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware, without regard to its conflict-of-laws principles.
+
+15. ENTIRE AGREEMENT. This Agreement, together with all Order Forms, constitutes the entire agreement between the Parties with respect to its subject matter and supersedes all prior and contemporaneous agreements, proposals, and representations, whether written or oral. Provider may amend this Agreement from time to time by posting a revised version on its website, and such amendments shall become effective five (5) days after posting.
+
+IN WITNESS WHEREOF, the Parties have executed this Agreement as of the Effective Date.
+
+NIMBUSSTACK SOFTWARE INC.          BRIGHTCART RETAIL PRIVATE LIMITED
+By: ____________________           By: ____________________
+Name: Jordan Hale                  Name: Ananya Sharma
+Title: VP, Sales                   Title: Chief Operating Officer

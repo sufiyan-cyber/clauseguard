@@ -1,0 +1,12 @@
+node_modules/
+.next/
+dist/
+.mastra/
+.env
+.env.local
+*.db
+*.db-*
+uploads/
+.fastembed-cache/
+qdrant-local/
+.claude/
