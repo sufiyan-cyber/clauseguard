@@ -6,8 +6,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${base}${path}`, init);
   const body = await res.json().catch(() => null);
   if (!res.ok) {
-    const message =
-      (body as { error?: string } | null)?.error ?? `Request failed (${res.status})`;
+    const data = body as { error?: string; blocked?: boolean; reasons?: string[] } | null;
+    const message = data?.blocked
+      ? `Blocked by Enkrypt input scan${data.reasons?.length ? `: ${data.reasons.join("; ")}` : ""}`
+      : (data?.error ?? `Request failed (${res.status})`);
     throw new Error(message);
   }
   return body as T;

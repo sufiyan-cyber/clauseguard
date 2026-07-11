@@ -10,3 +10,4 @@ uploads/
 .fastembed-cache/
 qdrant-local/
 .claude/
+JUDGE-GUIDE.md

@@ -67,7 +67,23 @@ export function QaChat({
         },
       ]);
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      if (/^Blocked by Enkrypt/i.test(msg)) {
+        // Injection scan rejected the question — show it as a blocked bubble, not a raw error
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `blocked-${Date.now()}`,
+            role: "assistant",
+            content: msg,
+            citations: [],
+            verdictId: null,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -140,7 +156,8 @@ function MessageBubble({
   onCitationClick: (ordinal: number) => void;
 }) {
   const isUser = message.role === "user";
-  const blocked = !isUser && /failed the grounding check/i.test(message.content);
+  const blocked =
+    !isUser && /failed the grounding check|blocked by enkrypt/i.test(message.content);
 
   // Render [clause:N] tokens as clickable chips
   const parts = message.content.split(/(\[clause:\d+\])/g);
@@ -158,7 +175,7 @@ function MessageBubble({
       >
         {blocked && (
           <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-risk-high">
-            <IconShieldX size={12} /> blocked by Enkrypt G2
+            <IconShieldX size={12} /> blocked by Enkrypt
           </p>
         )}
         <p className="whitespace-pre-wrap">
