@@ -2,7 +2,7 @@
 
 **HiDevs × Mastra Hackathon 2026 · Round 2 build · Track: Legal Document Intelligence Agent**
 
-> 📘 **New here (or a judge)? Read [JUDGE-GUIDE.md](JUDGE-GUIDE.md)** — the full story from ELI10 to architecture, the 5-minute demo script, cloud deployment steps, the local fallback runbook, and a judge Q&A bank.
+
 
 Upload a contract → five Mastra agents parse it, classify clauses, benchmark them against market standards retrieved from Qdrant, score risk, and draft safer redlines — with **Enkrypt AI safety gates on every output** and **two human-in-the-loop approval gates** before anything is final. Human decisions are embedded back into Qdrant, so the system learns your risk tolerance over time.
 
