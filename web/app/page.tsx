@@ -75,6 +75,24 @@ export default function HomePage() {
     }
   };
 
+  // One-click demo path: fetch the bundled sample contract and run it
+  const trySample = async () => {
+    setUploading(true);
+    setError(null);
+    try {
+      const res = await fetch("/vendor-msa-risky.txt");
+      if (!res.ok) throw new Error("Sample file unavailable");
+      const blob = await res.blob();
+      const file = new File([blob], "vendor-msa-risky.txt", { type: "text/plain" });
+      const { documentId } = await api.uploadDocument(file);
+      await api.analyze(documentId);
+      router.push(`/documents/${documentId}`);
+    } catch (err) {
+      setError((err as Error).message);
+      setUploading(false);
+    }
+  };
+
   return (
     <div className="space-y-10">
       {/* Hero */}
@@ -133,10 +151,14 @@ export default function HomePage() {
             <p className="mt-1 text-xs text-ink-faint">
               Analysis starts automatically · 10MB max · ~40 clauses per document on the free tier
             </p>
-            <div className="mt-5">
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
               <Button onClick={() => fileInput.current?.click()}>
                 <IconFileText size={14} />
                 Choose file
+              </Button>
+              <Button variant="ghost" onClick={trySample} ariaLabel="Analyze the sample contract">
+                <IconZap size={14} />
+                Try the sample contract
               </Button>
               <input
                 ref={fileInput}
@@ -147,6 +169,17 @@ export default function HomePage() {
                 aria-label="Upload contract file"
               />
             </div>
+            <p className="mt-3 text-[11px] text-ink-faint">
+              No contract handy? The sample is a deliberately one-sided vendor MSA —{" "}
+              <a
+                href="/vendor-msa-risky.txt"
+                download
+                className="font-medium text-brand underline-offset-2 hover:underline"
+              >
+                download it
+              </a>{" "}
+              or run it with one click.
+            </p>
           </>
         )}
         {error && (
@@ -197,7 +230,7 @@ export default function HomePage() {
           <EmptyState
             icon={<IconLayers size={26} />}
             title="No documents yet"
-            hint="Try samples/vendor-msa-risky.txt from the repo — a deliberately one-sided vendor MSA that lights up every risk detector."
+            hint="Click “Try the sample contract” above — a deliberately one-sided vendor MSA that lights up every risk detector."
           />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
