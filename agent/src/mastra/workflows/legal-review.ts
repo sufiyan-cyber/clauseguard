@@ -30,6 +30,12 @@ import {
   reviewFeedback,
   runs as runsTable,
   uid,
+  mongoDeleteClausesByDocument,
+  mongoSaveClauses,
+  mongoSaveReviewFeedback,
+  mongoUpdateClause,
+  mongoUpdateDocument,
+  mongoUpdateRun,
 } from "../../services/db";
 import {
   gateG1RiskGrounding,
@@ -69,7 +75,7 @@ type State = z.infer<typeof stateSchema>;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Pause between consecutive Groq calls — keeps free-tier RPM/TPM happy. */
-const LLM_PACING_MS = 1200;
+const LLM_PACING_MS = 2000;
 
 async function setDocumentStatus(documentId: string, status: string, error?: string) {
   await ensureSchema();
@@ -187,8 +193,10 @@ const parseDocument = createStep({
 
       // Replace any prior clauses (idempotent re-analysis)
       await db.delete(clausesTable).where(eq(clausesTable.documentId, documentId));
+      await mongoDeleteClausesByDocument(documentId).catch(() => {});
+      const clauseDocs = [];
       for (const c of parsed.clauses) {
-        await db.insert(clausesTable).values({
+        const clauseRecord = {
           id: uid(),
           documentId,
           ordinal: c.ordinal,
@@ -197,12 +205,18 @@ const parseDocument = createStep({
           redlineStatus: "none",
           createdAt: now(),
           updatedAt: now(),
-        });
+        };
+        await db.insert(clausesTable).values(clauseRecord);
+        clauseDocs.push(clauseRecord);
       }
+      await mongoSaveClauses(clauseDocs).catch((err) =>
+        console.warn("[MongoDB] mongoSaveClauses warning:", err.message),
+      );
       await db
         .update(documentsTable)
         .set({ title: parsed.documentTitle, updatedAt: now() })
         .where(eq(documentsTable.id, documentId));
+      await mongoUpdateDocument(documentId, { title: parsed.documentTitle, updatedAt: now() }).catch(() => {});
 
       await logRunStep(runId, "parseDocument", "completed", `${parsed.clauses.length} clauses`);
       return { documentId, correlationId };
@@ -341,11 +355,21 @@ const analyzeRisk = createStep({
         // Retrieve benchmarks + review memory per clause (hybrid search)
         const enriched = await Promise.all(
           batch.map(async (c) => {
-            const benchmarks = await searchBenchmarks(c.text.slice(0, 1000), {
-              clauseType: c.clauseType ?? undefined,
-              limit: 3,
-            });
-            const memory = await recallReviewDecisions(c.text, c.clauseType, 2);
+            let benchmarks: BenchmarkHit[] = [];
+            try {
+              benchmarks = await searchBenchmarks(c.text.slice(0, 1000), {
+                clauseType: c.clauseType ?? undefined,
+                limit: 3,
+              });
+            } catch (err) {
+              console.warn(`[analyzeRisk] benchmarks fallback for clause ${c.ordinal}:`, (err as Error).message);
+            }
+            let memory: any[] = [];
+            try {
+              memory = await recallReviewDecisions(c.text, c.clauseType, 2);
+            } catch (err) {
+              console.warn(`[analyzeRisk] review memory fallback for clause ${c.ordinal}:`, (err as Error).message);
+            }
             return { clause: c, benchmarks, memory };
           }),
         );
@@ -890,10 +914,17 @@ const compileReport = createStep({
         .update(documentsTable)
         .set({ reportJson: JSON.stringify(finalReport), status: "completed", updatedAt: now() })
         .where(eq(documentsTable.id, documentId));
+      await mongoUpdateDocument(documentId, {
+        report: finalReport,
+        reportJson: JSON.stringify(finalReport),
+        status: "completed",
+        updatedAt: now(),
+      }).catch(() => {});
       await db
         .update(runsTable)
         .set({ status: "completed", suspendPayload: null, updatedAt: now() })
         .where(eq(runsTable.runId, runId));
+      await mongoUpdateRun(runId, { status: "completed", suspendPayload: null, updatedAt: now() }).catch(() => {});
 
       await logRunStep(runId, "compileReport", "completed", `overall ${report.overallRisk}`);
       return { documentId, correlationId, overallRisk: report.overallRisk };

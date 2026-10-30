@@ -56,6 +56,16 @@ export const api = {
   health: () =>
     request<{
       status: string;
+      database?: {
+        provider: "mongodb" | "libsql-sqlite";
+        mongo: {
+          configured: boolean;
+          connected: boolean;
+          database: string;
+          error?: string | null;
+          latencyMs?: number;
+        };
+      };
       groqKey: boolean;
       enkryptKey: boolean;
       qdrant: string;

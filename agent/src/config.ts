@@ -4,6 +4,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import dotenv from "dotenv";
 
 /**
  * The process CWD differs between `mastra dev` (bundle dir), `mastra start`,
@@ -30,6 +31,9 @@ function findProjectRoot(): string {
 }
 
 export const projectRoot = findProjectRoot();
+
+// Explicitly load .env from project root
+dotenv.config({ path: path.join(projectRoot, ".env") });
 
 /** Absolute file: URL for libsql (forward slashes, Windows-safe). */
 function dbFileUrl(filename: string): string {
@@ -98,6 +102,12 @@ export const config = {
   /** Shared secret required on every request from the web gateway. */
   serviceApiKey: process.env.AGENT_API_KEY ?? "",
 
+  /** MongoDB cloud / Atlas / local persistent document database. */
+  mongodb: {
+    uri: process.env.MONGODB_URI ?? "",
+    dbName: process.env.MONGODB_DB_NAME ?? "clauseguard",
+  },
+
   /** Mastra storage (workflow snapshots, memory, traces). */
   dbUrl: process.env.DATABASE_URL ?? dbFileUrl("clauseguard.db"),
   /** App tables (documents, clauses, runs, verdicts...) — separate file to
@@ -113,8 +123,8 @@ export const config = {
     /** Max clauses analyzed per document (keeps Groq free-tier TPM in check). */
     maxClauses: 40,
     /** Clauses per LLM call during batch stages. */
-    classifyBatchSize: 10,
-    riskBatchSize: 4,
+    classifyBatchSize: 6,
+    riskBatchSize: 3,
     /** Requests per minute per client for the rate limiter. */
     rateLimitPerMinute: 60,
   },

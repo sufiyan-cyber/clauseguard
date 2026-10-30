@@ -109,6 +109,19 @@ export default function HomePage() {
         </p>
         {health && (
           <div className="mt-5 flex flex-wrap gap-2" aria-label="Service status">
+            {health.database && (
+              <Chip
+                tone={health.database.mongo.connected ? "pass" : "warn"}
+                title={
+                  health.database.mongo.connected
+                    ? `Connected to ${health.database.mongo.database} (${health.database.mongo.latencyMs}ms)`
+                    : health.database.mongo.error ?? "Local fallback active"
+                }
+              >
+                <IconDatabase size={10} />
+                DB: {health.database.mongo.connected ? "MongoDB Atlas" : "SQLite (local)"}
+              </Chip>
+            )}
             <Chip tone={health.groqKey ? "pass" : "fail"}>
               Groq {health.groqKey ? "connected" : "key missing"}
             </Chip>

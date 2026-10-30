@@ -8,13 +8,14 @@
  *                         injection / policy violations + grounding vs original
  *  G4 Final Compliance  — report scanned + "not legal advice" disclaimer enforced
  *
- * Every gate call is persisted to enkrypt_verdicts for the audit trail.
+ * Every gate call is persisted to enkrypt_verdicts for the audit trail
+ * across both SQLite and MongoDB collections.
  * If ENKRYPT_API_KEY is missing, gates run in "local" mode: deterministic
  * checks (citation verification, disclaimer, regex PII) still run and the
  * verdict is recorded as such — the pipeline never silently skips safety.
  */
 import { config } from "../config";
-import { db, enkryptVerdicts, ensureSchema, now, uid } from "./db";
+import { db, enkryptVerdicts, ensureSchema, mongoSaveEnkryptVerdict, now, uid } from "./db";
 
 type DetectorConfig = Record<string, unknown>;
 
@@ -105,7 +106,7 @@ async function persistVerdict(
 ): Promise<string> {
   await ensureSchema();
   const id = uid();
-  await db.insert(enkryptVerdicts).values({
+  const verdictDoc = {
     id,
     documentId: ctx.documentId ?? null,
     runId: ctx.runId ?? null,
@@ -117,7 +118,21 @@ async function persistVerdict(
     raw: JSON.stringify(raw ?? null).slice(0, 4000),
     latencyMs,
     createdAt: now(),
-  });
+  };
+
+  try {
+    await db.insert(enkryptVerdicts).values(verdictDoc);
+  } catch (err) {
+    console.error("[enkrypt] failed to record verdict to sqlite:", (err as Error).message);
+  }
+
+  // Mirror to MongoDB
+  await mongoSaveEnkryptVerdict({
+    ...verdictDoc,
+    scores,
+    raw,
+  }).catch((err) => console.warn("[MongoDB] mongoSaveEnkryptVerdict warning:", err.message));
+
   return id;
 }
 

@@ -15,7 +15,17 @@ import {
   documents as documentsTable,
   enkryptVerdicts,
   ensureSchema,
+  getMongoStatus,
+  isMongoActive,
   llmTraces,
+  mongoGetDocuments,
+  mongoGetLlmStats,
+  mongoSaveDocument,
+  mongoSaveQaMessage,
+  mongoSaveReviewFeedback,
+  mongoSaveRun,
+  mongoUpdateDocument,
+  mongoUpdateRun,
   now,
   qaMessages,
   reviewFeedback,
@@ -64,7 +74,7 @@ const approveBodySchema = z.object({
 });
 
 const qaBodySchema = z.object({
-  question: z.string().min(3).max(2000),
+  question: z.string().trim().min(1).max(2000),
 });
 
 function parseJson<T>(value: string | null, fallback: T): T {
@@ -97,7 +107,7 @@ function serializeClause(c: typeof clausesTable.$inferSelect) {
 
 export const apiRoutes = [
   // -------------------------------------------------------------------------
-  // Health
+  // Health & Database Diagnostics
   // -------------------------------------------------------------------------
   registerApiRoute("/v1/health", {
     method: "GET",
@@ -111,8 +121,13 @@ export const apiRoutes = [
       } catch {
         /* stays unreachable */
       }
+      const mongo = await getMongoStatus();
       return c.json({
         status: "ok",
+        database: {
+          provider: mongo.connected ? "mongodb" : "libsql-sqlite",
+          mongo,
+        },
         groqKey: Boolean(process.env.GROQ_API_KEY),
         enkryptKey: Boolean(config.enkrypt.apiKey),
         qdrant: qdrantStatus,
@@ -151,7 +166,7 @@ export const apiRoutes = [
       const storagePath = path.join(config.uploadDir, `${id}${ext || ".txt"}`);
       await writeFile(storagePath, Buffer.from(await file.arrayBuffer()));
 
-      await db.insert(documentsTable).values({
+      const docRecord = {
         id,
         filename: file.name,
         mime,
@@ -160,7 +175,12 @@ export const apiRoutes = [
         correlationId,
         createdAt: now(),
         updatedAt: now(),
-      });
+      };
+      await db.insert(documentsTable).values(docRecord);
+      await mongoSaveDocument(docRecord).catch((err) =>
+        console.warn("[MongoDB] mongoSaveDocument warning:", err.message),
+      );
+
       return c.json({ documentId: id, filename: file.name, status: "uploaded", correlationId }, 201);
     },
   }),
@@ -169,6 +189,23 @@ export const apiRoutes = [
     method: "GET",
     handler: async (c) => {
       await ensureSchema();
+      if (isMongoActive()) {
+        const mongoDocs = await mongoGetDocuments();
+        if (mongoDocs.length > 0) {
+          return c.json({
+            documents: mongoDocs.map((d) => ({
+              id: d.id,
+              filename: d.filename,
+              title: d.title,
+              status: d.status,
+              workflowRunId: d.workflowRunId,
+              createdAt: d.createdAt,
+              updatedAt: d.updatedAt,
+            })),
+          });
+        }
+      }
+
       const docs = await db
         .select()
         .from(documentsTable)
@@ -195,6 +232,7 @@ export const apiRoutes = [
       const id = c.req.param("id");
       const [doc] = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
       if (!doc) return c.json({ error: "Document not found" }, 404);
+
       const clauseRows = await db
         .select()
         .from(clausesTable)
@@ -234,6 +272,54 @@ export const apiRoutes = [
         .where(eq(documentsTable.id, documentId));
       if (!doc) return c.json({ error: "Document not found" }, 404);
 
+      // Handle friendly greetings directly with helpful guidance
+      const greetingRegex = /^(hi|hello|hey|greetings|good\s+(morning|afternoon|evening)|howdy)\b/i;
+      if (greetingRegex.test(question.trim()) && question.trim().length <= 25) {
+        const userMsgId = uid();
+        const userMsgDoc = {
+          id: userMsgId,
+          documentId,
+          role: "user" as const,
+          content: question,
+          createdAt: now(),
+        };
+        await db.insert(qaMessages).values(userMsgDoc);
+        await mongoSaveQaMessage(userMsgDoc).catch(() => {});
+
+        const assistantMessageId = uid();
+        const greetingAnswer = "Hello! I'm your ClauseGuard contract assistant. Ask me anything about this agreement — for example, about liability caps, payment terms, termination conditions, non-competes, or automatic renewals.";
+        const assistantMsgDoc = {
+          id: assistantMessageId,
+          documentId,
+          role: "assistant" as const,
+          content: greetingAnswer,
+          citations: JSON.stringify([]),
+          verdictId: null,
+          createdAt: now(),
+        };
+        await db.insert(qaMessages).values(assistantMsgDoc);
+        await mongoSaveQaMessage({
+          ...assistantMsgDoc,
+          citations: [],
+        }).catch(() => {});
+
+        return c.json({
+          messageId: assistantMessageId,
+          answer: greetingAnswer,
+          citations: [],
+          confidence: "high",
+          notFound: false,
+          blocked: false,
+          gate: {
+            verdict: "pass",
+            scores: { mode: "greeting" },
+            reasons: [],
+            verdictId: null,
+          },
+          correlationId,
+        });
+      }
+
       // A run counts as active only if it's suspended (waiting on a human) or
       // recently heartbeating. "running" rows with no update for 10+ minutes
       // are orphans (server restart mid-run) — mark failed and allow retry.
@@ -253,6 +339,7 @@ export const apiRoutes = [
             .update(runsTable)
             .set({ status: "failed", updatedAt: now() })
             .where(eq(runsTable.runId, r.runId));
+          await mongoUpdateRun(r.runId, { status: "failed", updatedAt: now() }).catch(() => {});
         }
       }
 
@@ -260,7 +347,7 @@ export const apiRoutes = [
       const workflow = mastra.getWorkflow("legalReviewWorkflow");
       const run = await workflow.createRun();
 
-      await db.insert(runsTable).values({
+      const runRecord = {
         runId: run.runId,
         documentId,
         workflowId: "legalReviewWorkflow",
@@ -269,11 +356,18 @@ export const apiRoutes = [
         correlationId,
         createdAt: now(),
         updatedAt: now(),
-      });
+      };
+      await db.insert(runsTable).values(runRecord);
+      await mongoSaveRun({
+        ...runRecord,
+        stepLog: [],
+      }).catch((err) => console.warn("[MongoDB] mongoSaveRun warning:", err.message));
+
       await db
         .update(documentsTable)
         .set({ workflowRunId: run.runId, status: "queued", updatedAt: now() })
         .where(eq(documentsTable.id, documentId));
+      await mongoUpdateDocument(documentId, { workflowRunId: run.runId, status: "queued", updatedAt: now() }).catch(() => {});
 
       // Fire and forget — progress is streamed via /api/runs/:id/stream.
       void run
@@ -284,6 +378,7 @@ export const apiRoutes = [
               .update(runsTable)
               .set({ status: "failed", updatedAt: now() })
               .where(eq(runsTable.runId, run.runId));
+            await mongoUpdateRun(run.runId, { status: "failed", updatedAt: now() }).catch(() => {});
           }
         })
         .catch(async (err) => {
@@ -292,10 +387,16 @@ export const apiRoutes = [
             .update(runsTable)
             .set({ status: "failed", updatedAt: now() })
             .where(eq(runsTable.runId, run.runId));
+          await mongoUpdateRun(run.runId, { status: "failed", updatedAt: now() }).catch(() => {});
           await db
             .update(documentsTable)
             .set({ status: "failed", errorMessage: String((err as Error).message).slice(0, 500), updatedAt: now() })
             .where(eq(documentsTable.id, documentId));
+          await mongoUpdateDocument(documentId, {
+            status: "failed",
+            errorMessage: String((err as Error).message).slice(0, 500),
+            updatedAt: now(),
+          }).catch(() => {});
         });
 
       return c.json({ runId: run.runId, documentId, correlationId, status: "running" }, 202);
@@ -303,7 +404,7 @@ export const apiRoutes = [
   }),
 
   // -------------------------------------------------------------------------
-  // Run status + SSE stream
+  // Run status & live SSE stream
   // -------------------------------------------------------------------------
   registerApiRoute("/v1/runs/:id", {
     method: "GET",
@@ -315,11 +416,12 @@ export const apiRoutes = [
       return c.json({
         runId: run.runId,
         documentId: run.documentId,
+        workflowId: run.workflowId,
         status: run.status,
         currentStep: run.currentStep,
         stepLog: parseJson<unknown[]>(run.stepLog, []),
         suspendPayload: parseJson<unknown>(run.suspendPayload, null),
-        correlationId: run.correlationId,
+        createdAt: run.createdAt,
         updatedAt: run.updatedAt,
       });
     },
@@ -330,66 +432,67 @@ export const apiRoutes = [
     handler: async (c) => {
       await ensureSchema();
       const runId = c.req.param("id");
-      const signal = c.req.raw.signal;
+      const encoder = new TextEncoder();
 
-      const stream = new ReadableStream({
+      let interval: NodeJS.Timeout | null = null;
+      let lastSerialized = "";
+
+      const body = new ReadableStream({
         start(controller) {
-          const encoder = new TextEncoder();
-          let lastPayload = "";
-          let closed = false;
-
-          const close = (interval: ReturnType<typeof setInterval>) => {
-            if (closed) return;
-            closed = true;
-            clearInterval(interval);
-            try {
-              controller.close();
-            } catch {
-              /* already closed */
-            }
+          const push = (event: string, data: unknown) => {
+            controller.enqueue(
+              encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+            );
           };
 
-          const interval = setInterval(async () => {
+          const poll = async () => {
             try {
               const [run] = await db.select().from(runsTable).where(eq(runsTable.runId, runId));
               if (!run) {
-                controller.enqueue(encoder.encode(`event: error\ndata: {"error":"run not found"}\n\n`));
-                close(interval);
+                push("error", { message: "Run not found" });
+                clearInterval(interval!);
+                controller.close();
                 return;
               }
-              const payload = JSON.stringify({
+
+              const payload = {
                 runId: run.runId,
-                documentId: run.documentId,
                 status: run.status,
                 currentStep: run.currentStep,
                 stepLog: parseJson<unknown[]>(run.stepLog, []),
                 suspendPayload: parseJson<unknown>(run.suspendPayload, null),
                 updatedAt: run.updatedAt,
-              });
-              if (payload !== lastPayload) {
-                lastPayload = payload;
-                controller.enqueue(encoder.encode(`event: run\ndata: ${payload}\n\n`));
+              };
+              const serialized = JSON.stringify(payload);
+              if (serialized !== lastSerialized) {
+                lastSerialized = serialized;
+                push("progress", payload);
               }
-              if (run.status === "completed" || run.status === "failed") {
-                controller.enqueue(encoder.encode(`event: done\ndata: ${payload}\n\n`));
-                close(interval);
+
+              if (["completed", "failed"].includes(run.status)) {
+                push("done", payload);
+                clearInterval(interval!);
+                controller.close();
               }
             } catch (err) {
-              controller.enqueue(
-                encoder.encode(`event: error\ndata: {"error":"${String((err as Error).message)}"}\n\n`),
-              );
-              close(interval);
+              push("error", { message: (err as Error).message });
+              clearInterval(interval!);
+              controller.close();
             }
-          }, 1200);
+          };
 
-          signal?.addEventListener("abort", () => close(interval));
+          void poll();
+          interval = setInterval(poll, 600);
+        },
+        cancel() {
+          if (interval) clearInterval(interval);
         },
       });
 
-      return new Response(stream, {
+      return new Response(body, {
         headers: {
           "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
+          "Cache-Control": "no-cache, no-transform",
           Connection: "keep-alive",
         },
       });
@@ -444,6 +547,7 @@ export const apiRoutes = [
         .update(runsTable)
         .set({ status: "running", suspendPayload: null, updatedAt: now() })
         .where(eq(runsTable.runId, runId));
+      await mongoUpdateRun(runId, { status: "running", suspendPayload: null, updatedAt: now() }).catch(() => {});
 
       // Fire and forget — the workflow continues (and may suspend again at gate 2).
       void rehydrated
@@ -454,6 +558,7 @@ export const apiRoutes = [
               .update(runsTable)
               .set({ status: "failed", updatedAt: now() })
               .where(eq(runsTable.runId, runId));
+            await mongoUpdateRun(runId, { status: "failed", updatedAt: now() }).catch(() => {});
           }
         })
         .catch(async (err) => {
@@ -462,6 +567,7 @@ export const apiRoutes = [
             .update(runsTable)
             .set({ status: "failed", updatedAt: now() })
             .where(eq(runsTable.runId, runId));
+          await mongoUpdateRun(runId, { status: "failed", updatedAt: now() }).catch(() => {});
         });
 
       return c.json({ runId, resumed: true, gate: body.gate }, 202);
@@ -479,7 +585,7 @@ export const apiRoutes = [
       const correlationId = getCorrelationId(c);
       const parsedBody = qaBodySchema.safeParse(await c.req.json().catch(() => null));
       if (!parsedBody.success) {
-        return c.json({ error: "Invalid body: question (3-2000 chars) required" }, 400);
+        return c.json({ error: "Please enter a question to ask about this contract." }, 400);
       }
       const { question } = parsedBody.data;
 
@@ -501,13 +607,18 @@ export const apiRoutes = [
         );
       }
 
-      await db.insert(qaMessages).values({
-        id: uid(),
+      const userMsgId = uid();
+      const userMsgDoc = {
+        id: userMsgId,
         documentId,
-        role: "user",
+        role: "user" as const,
         content: question,
         createdAt: now(),
-      });
+      };
+      await db.insert(qaMessages).values(userMsgDoc);
+      await mongoSaveQaMessage(userMsgDoc).catch((err) =>
+        console.warn("[MongoDB] mongoSaveQaMessage warning:", err.message),
+      );
 
       // Retrieve grounding context (hybrid search over this document only)
       const hits = await searchDocumentClauses(documentId, question, 5);
@@ -538,15 +649,22 @@ export const apiRoutes = [
         : result.answer;
 
       const assistantMessageId = uid();
-      await db.insert(qaMessages).values({
+      const assistantMsgDoc = {
         id: assistantMessageId,
         documentId,
-        role: "assistant",
+        role: "assistant" as const,
         content: finalAnswer,
         citations: JSON.stringify(result.citations ?? []),
         verdictId: g2.verdictId,
         createdAt: now(),
-      });
+      };
+      await db.insert(qaMessages).values(assistantMsgDoc);
+      await mongoSaveQaMessage({
+        ...assistantMsgDoc,
+        citations: result.citations ?? [],
+      }).catch((err) =>
+        console.warn("[MongoDB] mongoSaveQaMessage assistant warning:", err.message),
+      );
 
       return c.json({
         messageId: assistantMessageId,
@@ -633,7 +751,7 @@ export const apiRoutes = [
   }),
 
   // -------------------------------------------------------------------------
-  // Observability — LLM traces + aggregates + vector store stats
+  // Observability — LLM traces + aggregates + vector store stats + MongoDB analytics
   // -------------------------------------------------------------------------
   registerApiRoute("/v1/observability/traces", {
     method: "GET",
@@ -667,6 +785,13 @@ export const apiRoutes = [
         /* qdrant offline */
       }
 
+      let mongoStats = null;
+      try {
+        mongoStats = await mongoGetLlmStats();
+      } catch {
+        /* mongo offline */
+      }
+
       return c.json({
         traces: traces.slice(0, 100).map((t) => ({
           id: t.id,
@@ -696,6 +821,7 @@ export const apiRoutes = [
           ]),
         ),
         qdrant: qdrantStats,
+        mongoStats,
       });
     },
   }),

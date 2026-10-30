@@ -6,12 +6,12 @@
  * `tracedGenerate` wraps Agent.generate with structured output + retry with
  * exponential backoff on Groq 429/5xx, and persists the trace either way.
  * Complements Mastra's built-in AI tracing (span-level) with a queryable
- * llm_traces table surfaced in the UI observability dashboard.
+ * llm_traces table and MongoDB collections surfaced in the UI observability dashboard.
  */
 import { createHash } from "node:crypto";
 import type { Agent } from "@mastra/core/agent";
 import type { z } from "zod";
-import { db, ensureSchema, llmTraces, now, uid } from "./db";
+import { db, ensureSchema, llmTraces, mongoSaveLlmTrace, now, uid } from "./db";
 
 export interface TraceContext {
   correlationId?: string;
@@ -33,27 +33,35 @@ async function recordTrace(entry: {
   status: "ok" | "error";
   errorMessage?: string;
 }) {
+  const traceId = uid();
+  const traceRecord = {
+    id: traceId,
+    correlationId: entry.ctx.correlationId ?? null,
+    runId: entry.ctx.runId ?? null,
+    documentId: entry.ctx.documentId ?? null,
+    agentId: entry.agentId,
+    model: entry.model,
+    promptHash: entry.hash,
+    inputTokens: entry.usage?.inputTokens ?? null,
+    outputTokens: entry.usage?.outputTokens ?? null,
+    totalTokens: entry.usage?.totalTokens ?? null,
+    latencyMs: entry.latencyMs,
+    status: entry.status,
+    errorMessage: entry.errorMessage ?? null,
+    createdAt: now(),
+  };
+
   try {
     await ensureSchema();
-    await db.insert(llmTraces).values({
-      id: uid(),
-      correlationId: entry.ctx.correlationId ?? null,
-      runId: entry.ctx.runId ?? null,
-      documentId: entry.ctx.documentId ?? null,
-      agentId: entry.agentId,
-      model: entry.model,
-      promptHash: entry.hash,
-      inputTokens: entry.usage?.inputTokens ?? null,
-      outputTokens: entry.usage?.outputTokens ?? null,
-      totalTokens: entry.usage?.totalTokens ?? null,
-      latencyMs: entry.latencyMs,
-      status: entry.status,
-      errorMessage: entry.errorMessage ?? null,
-      createdAt: now(),
-    });
+    await db.insert(llmTraces).values(traceRecord);
   } catch (err) {
-    console.error("[tracing] failed to record trace:", (err as Error).message);
+    console.error("[tracing] failed to record trace to sqlite:", (err as Error).message);
   }
+
+  // Mirror to MongoDB
+  await mongoSaveLlmTrace(traceRecord).catch((err) =>
+    console.warn("[MongoDB] mongoSaveLlmTrace warning:", err.message),
+  );
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

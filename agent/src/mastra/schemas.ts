@@ -61,7 +61,7 @@ export const classifiedClausesSchema = z.object({
         clauseType: clauseTypeSchema,
         keyTerms: z
           .array(z.string())
-          .max(6)
+          .max(15)
           .describe("Up to 6 defined terms / key obligations found in the clause"),
       }),
     )
@@ -84,7 +84,7 @@ export const riskFindingsSchema = z.object({
           .describe("2-4 sentences: why risky, quoting the clause and citing benchmarks by [B#]"),
         deviations: z
           .array(z.string())
-          .max(4)
+          .max(10)
           .describe("Specific ways this clause deviates from the market benchmarks"),
       }),
     )
@@ -107,7 +107,7 @@ export const redlineSchema = z.object({
         to: z.string().describe("Short quote of the replacement language"),
       }),
     )
-    .max(6),
+    .max(15),
 });
 export type Redline = z.infer<typeof redlineSchema>;
 

@@ -113,44 +113,58 @@ async function hybridQuery(
   queryText: string,
   opts: { filter?: QdrantFilter; limit: number; scoreThreshold?: number },
 ) {
-  const client = qdrant();
-  const denseVec = await embedQuery(queryText);
-  const sparseVec: SparseVector | null = await embedSparseQuery(queryText);
+  try {
+    const client = qdrant();
+    const denseVec = await embedQuery(queryText);
+    let sparseVec: SparseVector | null = null;
+    try {
+      sparseVec = await embedSparseQuery(queryText);
+    } catch {
+      sparseVec = null;
+    }
 
-  if (sparseVec && sparseVec.indices.length > 0) {
+    if (sparseVec && sparseVec.indices.length > 0) {
+      try {
+        const res = await client.query(collection, {
+          prefetch: [
+            {
+              query: denseVec,
+              using: DENSE,
+              filter: opts.filter,
+              limit: opts.limit * 3,
+              params: { hnsw_ef: 128, quantization: { rescore: true } },
+            },
+            {
+              query: { values: sparseVec.values, indices: sparseVec.indices },
+              using: SPARSE,
+              filter: opts.filter,
+              limit: opts.limit * 3,
+            },
+          ],
+          query: { fusion: "rrf" },
+          limit: opts.limit,
+          with_payload: true,
+        });
+        return res.points;
+      } catch (err) {
+        console.warn("[hybridQuery] sparse fusion query fallback to dense:", (err as Error).message);
+      }
+    }
+
     const res = await client.query(collection, {
-      prefetch: [
-        {
-          query: denseVec,
-          using: DENSE,
-          filter: opts.filter,
-          limit: opts.limit * 3,
-          params: { hnsw_ef: 128, quantization: { rescore: true } },
-        },
-        {
-          query: { values: sparseVec.values, indices: sparseVec.indices },
-          using: SPARSE,
-          filter: opts.filter,
-          limit: opts.limit * 3,
-        },
-      ],
-      query: { fusion: "rrf" },
+      query: denseVec,
+      using: DENSE,
+      filter: opts.filter,
       limit: opts.limit,
+      score_threshold: opts.scoreThreshold,
       with_payload: true,
+      params: { hnsw_ef: 128, quantization: { rescore: true } },
     });
     return res.points;
+  } catch (err) {
+    console.warn("[hybridQuery] query failed, returning empty points:", (err as Error).message);
+    return [];
   }
-
-  const res = await client.query(collection, {
-    query: denseVec,
-    using: DENSE,
-    filter: opts.filter,
-    limit: opts.limit,
-    score_threshold: opts.scoreThreshold,
-    with_payload: true,
-    params: { hnsw_ef: 128, quantization: { rescore: true } },
-  });
-  return res.points;
 }
 
 export interface BenchmarkHit {

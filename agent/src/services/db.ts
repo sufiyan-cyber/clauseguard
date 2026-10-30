@@ -1,12 +1,17 @@
 /**
  * Application persistence layer (documents, clauses, runs, audit, traces).
- * Uses Drizzle ORM over LibSQL. Mastra's own workflow snapshots/memory live in
- * the same database file via @mastra/libsql, but in Mastra-managed tables.
+ * Uses Drizzle ORM over LibSQL with unified MongoDB synchronization.
+ * Mastra's own workflow snapshots/memory live in the same database file
+ * via @mastra/libsql, while application data is mirrored/persisted to MongoDB.
  */
 import { createClient, type Client } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 import { config } from "../config";
+import { mongoAppendRunStep } from "./mongo";
+
+// Re-export MongoDB services
+export * from "./mongo";
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -266,11 +271,17 @@ export async function logRunStep(
     sql: "SELECT step_log FROM runs WHERE run_id = ?",
     args: [runId],
   });
-  if (res.rows.length === 0) return;
-  const log = JSON.parse((res.rows[0].step_log as string) ?? "[]");
-  log.push({ step, status, detail: detail ?? null, at: now() });
-  await c.execute({
-    sql: "UPDATE runs SET step_log = ?, current_step = ?, updated_at = ? WHERE run_id = ?",
-    args: [JSON.stringify(log), step, now(), runId],
-  });
+  if (res.rows.length > 0) {
+    const log = JSON.parse((res.rows[0].step_log as string) ?? "[]");
+    log.push({ step, status, detail: detail ?? null, at: now() });
+    await c.execute({
+      sql: "UPDATE runs SET step_log = ?, current_step = ?, updated_at = ? WHERE run_id = ?",
+      args: [JSON.stringify(log), step, now(), runId],
+    });
+  }
+
+  // Atomically mirror to MongoDB
+  await mongoAppendRunStep(runId, step, status, detail).catch((err) =>
+    console.warn("[MongoDB] logRunStep sync warning:", err.message),
+  );
 }
