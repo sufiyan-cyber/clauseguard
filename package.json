@@ -1,0 +1,10 @@
+{
+  "name": "clauseguard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ClauseGuard — Legal Document Intelligence Agent",
+  "scripts": {
+    "start": "node start.mjs",
+    "dev": "node start.mjs"
+  }
+}

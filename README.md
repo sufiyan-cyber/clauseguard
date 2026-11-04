@@ -55,9 +55,27 @@ ClauseGuard consists of three core services running together:
   - [Enkrypt AI API Key](https://app.enkryptai.com) (Safety gates — optional, defaults to deterministic local mode if omitted)
   - [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) connection string (Optional — falls back to local SQLite automatically)
 
+### Single Command Startup (Recommended)
+
+From the project root (`clauseguard/`), simply run:
+
+```bash
+npm start
+```
+*(Or run `.\start.bat` / `node start.mjs`)*
+
+This concurrently starts:
+1. **Qdrant Vector Database** on `http://127.0.0.1:6333`
+2. **Mastra Agent Runtime** on `http://127.0.0.1:4111`
+3. **Next.js Web Interface** on `http://localhost:3000`
+
+All logs are streamed to your console with colored service prefixes (`[Qdrant]`, `[Agent]`, `[Web]`). Pressing `Ctrl+C` cleanly shuts down all three services.
+
 ---
 
-### Step 1: Start Qdrant Vector Engine
+### Manual Startup (3 Separate Terminals)
+
+If you prefer running services in separate windows:
 ClauseGuard includes a local, standalone Qdrant binary pre-seeded with 33 market-standard benchmark clauses.
 
 Open **Terminal 1**:
