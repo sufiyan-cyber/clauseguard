@@ -5,6 +5,8 @@
   "description": "ClauseGuard — Legal Document Intelligence Agent",
   "scripts": {
     "start": "node start.mjs",
-    "dev": "node start.mjs"
+    "dev": "node start.mjs",
+    "inspect": "node agent/inspect-db.mjs",
+    "sync-db": "node agent/sync-to-atlas.mjs"
   }
 }
